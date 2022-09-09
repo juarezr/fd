@@ -9,6 +9,7 @@ use std::io;
 use std::iter;
 use std::path::{Component, Path, PathBuf, Prefix};
 use std::process::Stdio;
+use std::str;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{bail, Result};
@@ -83,12 +84,12 @@ impl CommandSet {
         self.mode == ExecutionMode::Batch
     }
 
-    pub fn execute(&self, input: &Path, out_perm: Arc<Mutex<()>>, buffer_output: bool) -> ExitCode {
+    pub fn execute(&self, input: &Path, matches: &Vec<String>, out_perm: Arc<Mutex<()>>, buffer_output: bool) -> ExitCode {
         let path_separator = self.path_separator.as_deref();
         let commands = self
             .commands
             .iter()
-            .map(|c| c.generate(input, path_separator));
+            .map(|c| c.generate(input, path_separator, matches));
         execute_commands(commands, &out_perm, buffer_output)
     }
 
@@ -108,7 +109,7 @@ impl CommandSet {
             Ok(mut builders) => {
                 for path in paths {
                     for builder in &mut builders {
-                        if let Err(e) = builder.push(&path, path_separator) {
+                        if let Err(e) = builder.push(&path, path_separator, &Vec::new()) {
                             return handle_cmd_error(Some(&builder.cmd), e);
                         }
                     }
@@ -148,9 +149,9 @@ impl CommandBuilder {
             if arg.has_tokens() {
                 path_arg = Some(arg.clone());
             } else if path_arg == None {
-                pre_args.push(arg.generate("", None));
+                pre_args.push(arg.generate("", None, &Vec::new()));
             } else {
-                post_args.push(arg.generate("", None));
+                post_args.push(arg.generate("", None, &Vec::new()));
             }
         }
 
@@ -175,12 +176,12 @@ impl CommandBuilder {
         Ok(cmd)
     }
 
-    fn push(&mut self, path: &Path, separator: Option<&str>) -> io::Result<()> {
+    fn push(&mut self, path: &Path, separator: Option<&str>, matches: &Vec<String>) -> io::Result<()> {
         if self.limit > 0 && self.count >= self.limit {
             self.finish()?;
         }
 
-        let arg = self.path_arg.generate(path, separator);
+        let arg = self.path_arg.generate(path, separator, matches);
         if !self
             .cmd
             .args_would_fit(iter::once(&arg).chain(&self.post_args))
@@ -297,10 +298,10 @@ impl CommandTemplate {
     ///
     /// Using the internal `args` field, and a supplied `input` variable, a `Command` will be
     /// build.
-    fn generate(&self, input: &Path, path_separator: Option<&str>) -> io::Result<Command> {
-        let mut cmd = Command::new(self.args[0].generate(&input, path_separator));
+    fn generate(&self, input: &Path, path_separator: Option<&str>, matches: &Vec<String>) -> io::Result<Command> {
+        let mut cmd = Command::new(self.args[0].generate(&input, path_separator, matches));
         for arg in &self.args[1..] {
-            cmd.try_arg(arg.generate(&input, path_separator))?;
+            cmd.try_arg(arg.generate(&input, path_separator, matches))?;
         }
         Ok(cmd)
     }
@@ -324,7 +325,7 @@ impl ArgumentTemplate {
     /// Generate an argument from this template. If path_separator is Some, then it will replace
     /// the path separator in all placeholder tokens. Text arguments and tokens are not affected by
     /// path separator substitution.
-    pub fn generate(&self, path: impl AsRef<Path>, path_separator: Option<&str>) -> OsString {
+    pub fn generate(&self, path: impl AsRef<Path>, path_separator: Option<&str>, matches: &Vec<String>) -> OsString {
         use self::Token::*;
         let path = path.as_ref();
 
@@ -347,6 +348,11 @@ impl ArgumentTemplate {
                             s.push(Self::replace_separator(path.as_ref(), path_separator))
                         }
                         Text(ref string) => s.push(string),
+                        Positional(pos) => {
+                            if let Some(re_group) = matches.get(pos) {
+                                s.push(re_group)
+                            }
+                        }
                     }
                 }
                 s
@@ -559,7 +565,7 @@ mod tests {
         let arg = ArgumentTemplate::Tokens(vec![Token::Placeholder]);
         macro_rules! check {
             ($input:expr, $expected:expr) => {
-                assert_eq!(arg.generate($input, Some("#")), OsString::from($expected));
+                assert_eq!(arg.generate($input, Some("#"), &Vec::new()), OsString::from($expected));
             };
         }
 
