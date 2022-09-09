@@ -401,7 +401,8 @@ pub fn build_app() -> Command<'static> {
                        '{/}':  basename\n  \
                        '{//}': parent directory\n  \
                        '{.}':  path without file extension\n  \
-                       '{/.}': basename without file extension\n\n\
+                       '{/.}': basename without file extension\n \
+                       '{<num>}': <num> is the regex group substitution index for the pattern matched \n\n\
                      If no placeholder is present, an implicit \"{}\" at the end is assumed.\n\n\
                      Examples:\n\n  \
                        - find all *.zip files and unzip them:\n\n      \
@@ -410,6 +411,8 @@ pub fn build_app() -> Command<'static> {
                            fd -e h -e cpp -x clang-format -i\n\n  \
                        - Convert all *.jpg files to *.png files:\n\n      \
                            fd -e jpg -x convert {} {.}.png\
+                       - Rename all *.jpeg files with extension *.jpg:\n\n      \
+                           fd '(.+)\\.(jpg)$' -x mv {} {1}.{2}\
                     ",
                 ),
         )
@@ -431,7 +434,8 @@ pub fn build_app() -> Command<'static> {
                        '{/}':  basename\n  \
                        '{//}': parent directory\n  \
                        '{.}':  path without file extension\n  \
-                       '{/.}': basename without file extension\n\n\
+                       '{/.}': basename without file extension\n \
+                       '{<num>}': <num> is the regex group substitution index for the pattern matched \n\n\
                      If no placeholder is present, an implicit \"{}\" at the end is assumed.\n\n\
                      Examples:\n\n  \
                        - Find all test_*.py files and open them in your favorite editor:\n\n      \

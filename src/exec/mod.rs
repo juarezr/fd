@@ -222,7 +222,7 @@ impl CommandTemplate {
         S: AsRef<str>,
     {
         static PLACEHOLDER_PATTERN: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"\{(/?\.?|//)\}").unwrap());
+            Lazy::new(|| Regex::new(r"\{(/?\.?|//|[0-9]+)\}").unwrap());
 
         let mut args = Vec::new();
         let mut has_placeholder = false;
@@ -247,7 +247,12 @@ impl CommandTemplate {
                     "{/}" => tokens.push(Token::Basename),
                     "{//}" => tokens.push(Token::Parent),
                     "{/.}" => tokens.push(Token::BasenameNoExt),
-                    _ => unreachable!("Unhandled placeholder"),
+                    number => {
+                        let len_1 = number.len()-1;
+                        let num = &number[1..len_1];
+                        let pos = num.parse::<usize>().unwrap();
+                        tokens.push(Token::Positional(pos))
+                    }
                 }
 
                 has_placeholder = true;

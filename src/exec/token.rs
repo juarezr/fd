@@ -12,6 +12,7 @@ pub enum Token {
     NoExt,
     BasenameNoExt,
     Text(String),
+    Positional(usize),
 }
 
 impl Display for Token {
@@ -23,6 +24,7 @@ impl Display for Token {
             Token::NoExt => f.write_str("{.}")?,
             Token::BasenameNoExt => f.write_str("{/.}")?,
             Token::Text(ref string) => f.write_str(string)?,
+            Token::Positional(ref pos) => f.write_str(&pos.to_string())?,
         }
         Ok(())
     }
