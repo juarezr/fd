@@ -2,6 +2,7 @@ use std::ffi::OsStr;
 use std::{
     fs::{FileType, Metadata},
     path::{Path, PathBuf},
+    collections::HashMap,
 };
 use std::borrow::Cow;
 
@@ -18,7 +19,7 @@ enum DirEntryInner {
 pub struct DirEntry {
     inner: DirEntryInner,
     metadata: OnceCell<Option<Metadata>>,
-    matches: Vec<String>,
+    match_list: HashMap<usize, HashMap<usize, String>>,
 }
 
 impl DirEntry {
@@ -27,7 +28,7 @@ impl DirEntry {
         Self {
             inner: DirEntryInner::Normal(e),
             metadata: OnceCell::new(),
-            matches: Vec::new(),
+            match_list: HashMap::new(),
         }
     }
 
@@ -35,7 +36,7 @@ impl DirEntry {
         Self {
             inner: DirEntryInner::BrokenSymlink(path),
             metadata: OnceCell::new(),
-            matches: Vec::new(),
+            match_list: HashMap::new(),
         }
     }
 
@@ -46,8 +47,8 @@ impl DirEntry {
         }
     }
 
-    pub fn matches(&self) -> &Vec<String> {
-        &&self.matches
+    pub fn matches(&self) -> &HashMap<usize, HashMap<usize, String>> {
+        &self.match_list
     }
 
     pub fn into_path(self) -> PathBuf {
@@ -83,22 +84,21 @@ impl DirEntry {
     pub fn is_match(&mut self, pattern: &Regex, search_full_path: bool) -> bool {
         let search_str = self.get_search_str(search_full_path);
         let search_res = filesystem::osstr_to_bytes(search_str.as_ref());
+        let mut found: HashMap<usize, HashMap<usize, String>> = HashMap::new();
 
-        let mut parts:Vec<String> = Vec::new();
-        for matched in pattern.captures_iter(&search_res) {
-            for (j, group) in matched.iter().enumerate() {
-                if j > 0 {
-                    if let Some(value) = group {
-                        let cap = value.as_bytes();
-                        let text = std::str::from_utf8(cap).unwrap();
-                        let part = text.to_string();
-                        parts.push(part);
-                    }
+        for (ocurrence, matched) in pattern.captures_iter(&search_res).enumerate() {
+            let mut matched_groups: HashMap<usize, String> = HashMap::new();
+            for (group, group_match) in matched.iter().enumerate() {
+                if let Some(value) = group_match {
+                    let cap = value.as_bytes();
+                    let text = String::from_utf8(cap.to_vec()).unwrap();
+                    matched_groups.insert(group, text );    
                 }
             }
+            found.insert(ocurrence, matched_groups);
         }
-        self.matches = parts;
-        self.matches.len() > 0
+        self.match_list = found;
+        self.match_list.len() > 0
     }
 
     fn get_search_str(&self, search_full_path: bool) -> Cow<OsStr> {

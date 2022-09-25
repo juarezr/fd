@@ -11,6 +11,7 @@ use std::path::{Component, Path, PathBuf, Prefix};
 use std::process::Stdio;
 use std::str;
 use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 
 use anyhow::{bail, Result};
 use argmax::Command;
@@ -84,7 +85,7 @@ impl CommandSet {
         self.mode == ExecutionMode::Batch
     }
 
-    pub fn execute(&self, input: &Path, matches: &Vec<String>, out_perm: Arc<Mutex<()>>, buffer_output: bool) -> ExitCode {
+    pub fn execute(&self, input: &Path, matches: &HashMap<usize, HashMap<usize, String>>, out_perm: Arc<Mutex<()>>, buffer_output: bool) -> ExitCode {
         let path_separator = self.path_separator.as_deref();
         let commands = self
             .commands
@@ -109,7 +110,7 @@ impl CommandSet {
             Ok(mut builders) => {
                 for path in paths {
                     for builder in &mut builders {
-                        if let Err(e) = builder.push(&path, path_separator, &Vec::new()) {
+                        if let Err(e) = builder.push(&path, path_separator, &HashMap::new()) {
                             return handle_cmd_error(Some(&builder.cmd), e);
                         }
                     }
@@ -149,9 +150,9 @@ impl CommandBuilder {
             if arg.has_tokens() {
                 path_arg = Some(arg.clone());
             } else if path_arg == None {
-                pre_args.push(arg.generate("", None, &Vec::new()));
+                pre_args.push(arg.generate("", None, &HashMap::new()));
             } else {
-                post_args.push(arg.generate("", None, &Vec::new()));
+                post_args.push(arg.generate("", None, &HashMap::new()));
             }
         }
 
@@ -176,7 +177,7 @@ impl CommandBuilder {
         Ok(cmd)
     }
 
-    fn push(&mut self, path: &Path, separator: Option<&str>, matches: &Vec<String>) -> io::Result<()> {
+    fn push(&mut self, path: &Path, separator: Option<&str>, matches: &HashMap<usize, HashMap<usize, String>>) -> io::Result<()> {
         if self.limit > 0 && self.count >= self.limit {
             self.finish()?;
         }
@@ -298,7 +299,7 @@ impl CommandTemplate {
     ///
     /// Using the internal `args` field, and a supplied `input` variable, a `Command` will be
     /// build.
-    fn generate(&self, input: &Path, path_separator: Option<&str>, matches: &Vec<String>) -> io::Result<Command> {
+    fn generate(&self, input: &Path, path_separator: Option<&str>, matches: &HashMap<usize, HashMap<usize, String>>) -> io::Result<Command> {
         let mut cmd = Command::new(self.args[0].generate(&input, path_separator, matches));
         for arg in &self.args[1..] {
             cmd.try_arg(arg.generate(&input, path_separator, matches))?;
@@ -325,7 +326,7 @@ impl ArgumentTemplate {
     /// Generate an argument from this template. If path_separator is Some, then it will replace
     /// the path separator in all placeholder tokens. Text arguments and tokens are not affected by
     /// path separator substitution.
-    pub fn generate(&self, path: impl AsRef<Path>, path_separator: Option<&str>, matches: &Vec<String>) -> OsString {
+    pub fn generate(&self, path: impl AsRef<Path>, path_separator: Option<&str>, matches: &HashMap<usize, HashMap<usize, String>>) -> OsString {
         use self::Token::*;
         let path = path.as_ref();
 
@@ -349,8 +350,10 @@ impl ArgumentTemplate {
                         }
                         Text(ref string) => s.push(string),
                         Positional(pos) => {
-                            if let Some(re_group) = matches.get(pos) {
-                                s.push(re_group)
+                            if let Some(groups) = matches.get(&0) {
+                                if let Some(re_group) = groups.get(&pos) {
+                                    s.push(re_group)
+                                }
                             }
                         }
                     }
@@ -565,7 +568,7 @@ mod tests {
         let arg = ArgumentTemplate::Tokens(vec![Token::Placeholder]);
         macro_rules! check {
             ($input:expr, $expected:expr) => {
-                assert_eq!(arg.generate($input, Some("#"), &Vec::new()), OsString::from($expected));
+                assert_eq!(arg.generate($input, Some("#"), &HashMap::new()), OsString::from($expected));
             };
         }
 
