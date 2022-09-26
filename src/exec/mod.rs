@@ -224,7 +224,7 @@ impl CommandTemplate {
         S: AsRef<str>,
     {
         static PLACEHOLDER_PATTERN: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"\{(/?\.?|//|[0-9]+)\}").unwrap());
+            Lazy::new(|| Regex::new(r"\{((?:/?\.?|//)|(?:\d+))(?:\.(\d+))?\}").unwrap());
 
         let mut args = Vec::new();
         let mut has_placeholder = false;
@@ -235,8 +235,9 @@ impl CommandTemplate {
             let mut tokens = Vec::new();
             let mut start = 0;
 
-            for placeholder in PLACEHOLDER_PATTERN.find_iter(arg) {
+            for matched_text in PLACEHOLDER_PATTERN.captures_iter(arg) {
                 // Leading text before the placeholder.
+                let placeholder = matched_text.get(0).unwrap();
                 if placeholder.start() > start {
                     tokens.push(Token::Text(arg[start..placeholder.start()].to_owned()));
                 }
@@ -249,11 +250,15 @@ impl CommandTemplate {
                     "{/}" => tokens.push(Token::Basename),
                     "{//}" => tokens.push(Token::Parent),
                     "{/.}" => tokens.push(Token::BasenameNoExt),
-                    number => {
-                        let len_1 = number.len()-1;
-                        let num = &number[1..len_1];
-                        let pos = num.parse::<usize>().unwrap();
-                        tokens.push(Token::Positional(pos))
+                    _ => {
+                        // pattern assures that groups are numbers
+                        let num1: usize = matched_text.get(1).unwrap().as_str().parse().unwrap();
+                        let token_regex = if let Some(num2) = matched_text.get(2) {
+                            Token::Positional(num1, num2.as_str().parse().unwrap())
+                        } else {
+                            Token::Positional(1, num1)
+                        };
+                        tokens.push(token_regex)
                     }
                 }
 
@@ -349,10 +354,20 @@ impl ArgumentTemplate {
                             s.push(Self::replace_separator(path.as_ref(), path_separator))
                         }
                         Text(ref string) => s.push(string),
-                        Positional(pos) => {
-                            if let Some(groups) = matches.get(&0) {
-                                if let Some(re_group) = groups.get(&pos) {
-                                    s.push(re_group)
+                        Positional(ocurrence, group) => {
+                            // {0}, {M.0}, or {0.N} gets text from all ocurrences/matches
+                            let match_count = matches.len() - 1; 
+                            let applied_matches = if ocurrence <= 0 { 
+                                0..=match_count
+                            } else {
+                                let single_match = ocurrence - 1;
+                                single_match..=single_match
+                            };
+                            for match_num in applied_matches {
+                                if let Some(groups) = matches.get(&match_num) {
+                                    if let Some(re_group) = groups.get(&group) {
+                                        s.push(re_group)
+                                    }
                                 }
                             }
                         }
