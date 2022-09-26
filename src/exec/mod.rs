@@ -361,7 +361,7 @@ impl ArgumentTemplate {
                         Positional(ocurrence, group, ref default) => {
                             // {0}, {M.0}, or {0.N} gets text from all ocurrences/matches
                             let match_count = matches.len() - 1; 
-                            let applied_matches = if ocurrence <= 0 { 
+                            let applied_matches = if ocurrence < 1 { 
                                 0..=match_count
                             } else {
                                 let single_match = ocurrence - 1;
@@ -604,7 +604,7 @@ mod tests {
         let arg = ArgumentTemplate::Tokens(vec![Token::Placeholder]);
         macro_rules! check {
             ($input:expr, $expected:expr) => {
-                assert_eq!(arg.generate($input, Some("#")), OsString::from($expected));
+                assert_eq!(arg.generate($input, Some("#"), &HashMap::new()), OsString::from($expected));
             };
         }
 

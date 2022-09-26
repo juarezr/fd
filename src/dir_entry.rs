@@ -98,7 +98,7 @@ impl DirEntry {
             found.insert(ocurrence, matched_groups);
         }
         self.match_list = found;
-        self.match_list.len() > 0
+        self.match_list.is_empty()
     }
 
     fn get_search_str(&self, search_full_path: bool) -> Cow<OsStr> {
