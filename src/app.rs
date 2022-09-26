@@ -404,6 +404,7 @@ pub fn build_app() -> Command<'static> {
                        '{/.}': basename without file extension\n \
                        '{N}':  text matched by the N-th group in the first pattern ocurrence. Text outside groups are discarted.\n\
                        '{M.N}':text matched in the M-th pattern ocurrence by the N-th group over the the path or filename.\n\n\
+                       '{N:-D}': text matched by the optional ocurrence/group or defaults to 'D' when not matched.\n\
                      Obs:\n
                        - Using 0 for M/N substitutes by the text from all groups or all ocurrences respectively.\n\
                        - If no placeholder is present, an implicit \"{}\" at the end is assumed.\n\n\

@@ -223,8 +223,11 @@ impl CommandTemplate {
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
+        // GNU Parallel: /?\.?|//
+        // Positional  : (?:(\d+)(?:\.(\d+))?(?::-([^\}]+)?)?)
+        static PLACEHOLDER_REGEX: &str = r"\{(?:/?\.?|//|(?:(\d+)(?:\.(\d+))?(?::-([^\}]+)?)?))\}";
         static PLACEHOLDER_PATTERN: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"\{((?:/?\.?|//)|(?:\d+))(?:\.(\d+))?\}").unwrap());
+            Lazy::new(|| Regex::new(PLACEHOLDER_REGEX).unwrap());
 
         let mut args = Vec::new();
         let mut has_placeholder = false;
@@ -251,12 +254,13 @@ impl CommandTemplate {
                     "{//}" => tokens.push(Token::Parent),
                     "{/.}" => tokens.push(Token::BasenameNoExt),
                     _ => {
-                        // pattern assures that groups are numbers
+                        // regex pattern assures that ocurrence and group always are numbers
                         let num1: usize = matched_text.get(1).unwrap().as_str().parse().unwrap();
+                        let default = matched_text.get(3).map_or("", |m| m.as_str()).to_string();
                         let token_regex = if let Some(num2) = matched_text.get(2) {
-                            Token::Positional(num1, num2.as_str().parse().unwrap())
+                            Token::Positional(num1, num2.as_str().parse().unwrap(), default)
                         } else {
-                            Token::Positional(1, num1)
+                            Token::Positional(1, num1, default)
                         };
                         tokens.push(token_regex)
                     }
@@ -354,7 +358,7 @@ impl ArgumentTemplate {
                             s.push(Self::replace_separator(path.as_ref(), path_separator))
                         }
                         Text(ref string) => s.push(string),
-                        Positional(ocurrence, group) => {
+                        Positional(ocurrence, group, ref default) => {
                             // {0}, {M.0}, or {0.N} gets text from all ocurrences/matches
                             let match_count = matches.len() - 1; 
                             let applied_matches = if ocurrence <= 0 { 
@@ -366,8 +370,10 @@ impl ArgumentTemplate {
                             for match_num in applied_matches {
                                 if let Some(groups) = matches.get(&match_num) {
                                     if let Some(re_group) = groups.get(&group) {
-                                        s.push(re_group)
+                                        s.push(re_group);
+                                        continue
                                     }
+                                    s.push(default)
                                 }
                             }
                         }
