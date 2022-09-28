@@ -92,13 +92,13 @@ impl DirEntry {
                 if let Some(value) = group_match {
                     let cap = value.as_bytes();
                     let text = String::from_utf8(cap.to_vec()).unwrap();
-                    matched_groups.insert(group, text );    
+                    matched_groups.insert(group, text );
                 }
             }
             found.insert(ocurrence, matched_groups);
         }
         self.match_list = found;
-        self.match_list.is_empty()
+        !self.match_list.is_empty()
     }
 
     fn get_search_str(&self, search_full_path: bool) -> Cow<OsStr> {
